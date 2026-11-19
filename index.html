@@ -80,7 +80,6 @@
     <div class="actions" id="msgActions">
       <button class="primary" id="copy">📋 Copier le message</button>
       <button id="copyImg">🖼️ Copier le tableau en image</button>
-      <a id="waLink" href="#" target="_blank" rel="noopener"><button type="button">💬 Ouvrir WhatsApp</button></a>
       <span id="copyInfo" class="muted"></span>
     </div>
   </section>
@@ -507,7 +506,6 @@ function updateMessage(weekEvs){
   const txt = buildMessage(weekEvs || []);
   const ta = document.getElementById('message');
   ta.value = txt;
-  document.getElementById('waLink').href = 'https://wa.me/?text='+encodeURIComponent(ta.value);
 }
 
 /* ================= UI ================= */
