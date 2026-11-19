@@ -88,6 +88,8 @@
         <label for="icsUrl">URL d'export ICS du calendrier (lien de partage Framagenda, lecture seule)</label>
         <input type="text" id="icsUrl">
       </div>
+      <p class="muted">Jours de fermeture (colonnes masquées) :</p>
+      <div id="closedDays" style="display:flex;gap:.6rem;flex-wrap:wrap;margin:.3rem 0 .8rem"></div>
       <p class="muted">Correspondance couleur Framagenda → signification&nbsp;:</p>
       <div id="colormap"></div>
       <div class="field">
@@ -114,6 +116,7 @@
 const DEFAULTS = {
   icsUrl: 'https://framagenda.org/remote.php/dav/public-calendars/5m33p3SsirPzZPq2/?export',
   shopName: 'Permanences Traouquet',
+  closedDays: ['MO'],   // jour(s) de fermeture : colonne masquée dans le tableau
   colormap: {
     cadetblue:     'green',
     khaki:         'yellow',
@@ -125,7 +128,10 @@ const DEFAULTS = {
 let settings = loadSettings();
 function loadSettings(){
   try { const s = JSON.parse(localStorage.getItem('perma.settings'));
-        if (s) return Object.assign({}, DEFAULTS, s, {colormap: Object.assign({}, DEFAULTS.colormap, s.colormap||{})}); }
+        if (s) return Object.assign({}, DEFAULTS, s, {
+          colormap: Object.assign({}, DEFAULTS.colormap, s.colormap||{}),
+          closedDays: Array.isArray(s.closedDays) ? s.closedDays : DEFAULTS.closedDays.slice()
+        }); }
   catch(e){}
   return JSON.parse(JSON.stringify(DEFAULTS));
 }
@@ -144,6 +150,10 @@ function sameDay(a,b){ return a.getFullYear()===b.getFullYear()&&a.getMonth()===
 let weekStart = mondayOf(addDays(new Date(), 7));
 if (new Date().getDay()===1 && false) {} // conservé simple : toujours la semaine suivante
 const DAY_NAMES = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+const DAY_SHORT = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+// colonnes de jours affichées (les jours de fermeture sont masqués)
+// i = index lundi→dimanche ; clé ICS correspondante = DOWKEY[(i+1)%7]
+function visibleDays(){ return [0,1,2,3,4,5,6].filter(i=>!settings.closedDays.includes(DOWKEY[(i+1)%7])); }
 
 /* ================= Chargement ICS ================= */
 let icsText = localStorage.getItem('perma.ics') || null;
@@ -320,8 +330,9 @@ function renderAll(){
     .sort((a,b)=> a.slice(0,5).localeCompare(b.slice(0,5)));
 
   // table
+  const vis = visibleDays();
   let html = '<table><thead><tr><th style="min-width:6.5rem">Créneau</th>';
-  for (let i=0;i<7;i++){
+  for (const i of vis){
     const d = addDays(ws,i);
     html += '<th>'+DAY_NAMES[i]+'<br><span class="muted">'+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'</span></th>';
   }
@@ -329,7 +340,7 @@ function renderAll(){
   for (const s of slots){
     const [st,en] = s.split('-');
     html += '<tr><td class="slot">'+fmtSlot(st)+' → '+fmtSlot(en)+'</td>';
-    for (let i=0;i<7;i++){
+    for (const i of vis){
       const d = addDays(ws,i);
       const cell = weekEvs.filter(e=> sameDay(e.date,d) && e.startT===st && (e.endT||'')===en);
       if (!cell.length){ html += '<td class="st-empty">—</td>'; continue; }
@@ -394,7 +405,8 @@ function buildSvg(weekEvs){
   const ws = weekStart;
   const rows = [...new Set(weekEvs.map(e=>e.startT+'-'+(e.endT||e.startT)))]
     .sort((a,b)=> a.slice(0,5).localeCompare(b.slice(0,5)));
-  const W = SLOT_W + 7*DAY_W, H = TITLE_H + HEAD_H + rows.length*ROW_H + LEG_H;
+  const vis = visibleDays();
+  const W = SLOT_W + vis.length*DAY_W, H = TITLE_H + HEAD_H + rows.length*ROW_H + LEG_H;
   const PAL = {green:'#b8e0a4', yellow:'#ffef99', red:'#f5a9a9', other:'#cfd8e8', empty:'#f6f7f9'};
   const rangeDF = new Intl.DateTimeFormat('fr-FR',{day:'numeric',month:'long'});
   const yrDF = new Intl.DateTimeFormat('fr-FR',{year:'numeric'});
@@ -405,31 +417,32 @@ function buildSvg(weekEvs){
   s += `<rect x="0" y="${y0}" width="${W}" height="${HEAD_H}" fill="#eef1f5"/>`;
   s += `<rect x="0" y="${y0}" width="${SLOT_W}" height="${HEAD_H}" stroke="#d9dde3" fill="none"/>`;
   s += `<text x="${SLOT_W/2}" y="${y0+HEAD_H/2+5}" font-size="13" font-weight="bold" text-anchor="middle">Créneau</text>`;
-  for (let i=0;i<7;i++){
-    const d = addDays(ws,i), x = SLOT_W+i*DAY_W;
-    s += `<rect x="${x}" y="${y0}" width="${DAY_W}" height="${HEAD_H}" stroke="#d9dde3" fill="none"/>`;
-    s += `<text x="${x+DAY_W/2}" y="${y0+19}" font-size="13" font-weight="bold" text-anchor="middle">${DAY_NAMES[i]}</text>`;
-    s += `<text x="${x+DAY_W/2}" y="${y0+36}" font-size="11" fill="#667" text-anchor="middle">${pad2(d.getDate())}/${pad2(d.getMonth()+1)}</text>`;
+  for (const i of vis){
+    const d = addDays(ws,i);
+    const cx = SLOT_W + vis.indexOf(i)*DAY_W;
+    s += `<rect x="${cx}" y="${y0}" width="${DAY_W}" height="${HEAD_H}" stroke="#d9dde3" fill="none"/>`;
+    s += `<text x="${cx+DAY_W/2}" y="${y0+19}" font-size="13" font-weight="bold" text-anchor="middle">${DAY_NAMES[i]}</text>`;
+    s += `<text x="${cx+DAY_W/2}" y="${y0+36}" font-size="11" fill="#667" text-anchor="middle">${pad2(d.getDate())}/${pad2(d.getMonth()+1)}</text>`;
   }
   rows.forEach((r,ri)=>{
     const [st,en] = r.split('-');
     const y = y0+HEAD_H+ri*ROW_H;
     s += `<rect x="0" y="${y}" width="${SLOT_W}" height="${ROW_H}" fill="#f3f4f6" stroke="#d9dde3"/>`;
     s += `<text x="${SLOT_W/2}" y="${y+ROW_H/2+5}" font-size="13" font-weight="bold" text-anchor="middle">${fmtSlot(st)} → ${fmtSlot(en)}</text>`;
-    for (let i=0;i<7;i++){
-      const d = addDays(ws,i), x = SLOT_W+i*DAY_W;
+    for (const i of vis){
+      const d = addDays(ws,i), cx = SLOT_W + vis.indexOf(i)*DAY_W;
       const cell = weekEvs.filter(e=> sameDay(e.date,d) && e.startT===st && (e.endT||'')===en);
       if (!cell.length){
-        s += `<rect x="${x}" y="${y}" width="${DAY_W}" height="${ROW_H}" fill="${PAL.empty}" stroke="#d9dde3"/>`;
-        s += `<text x="${x+DAY_W/2}" y="${y+ROW_H/2+4}" font-size="12" fill="#99a" text-anchor="middle">—</text>`;
+        s += `<rect x="${cx}" y="${y}" width="${DAY_W}" height="${ROW_H}" fill="${PAL.empty}" stroke="#d9dde3"/>`;
+        s += `<text x="${cx+DAY_W/2}" y="${y+ROW_H/2+4}" font-size="12" fill="#99a" text-anchor="middle">—</text>`;
         continue;
       }
       const sts = cell.map(statusOf);
       const fill = PAL[sts.includes('red')?'red':sts.includes('yellow')?'yellow':sts.includes('green')?'green':'other'];
-      s += `<rect x="${x}" y="${y}" width="${DAY_W}" height="${ROW_H}" fill="${fill}" stroke="#d9dde3"/>`;
+      s += `<rect x="${cx}" y="${y}" width="${DAY_W}" height="${ROW_H}" fill="${fill}" stroke="#d9dde3"/>`;
       const names = cell.map(e=>e.summ).join(', ');
       wrapText(names, 17).forEach((ln,li)=>{
-        s += `<text x="${x+DAY_W/2}" y="${y+ROW_H/2 - (wrapText(names,17).length-1)*8 + 5 + li*16}" font-size="13" font-weight="500" text-anchor="middle">${escXml(ln)}</text>`;
+        s += `<text x="${cx+DAY_W/2}" y="${y+ROW_H/2 - (wrapText(names,17).length-1)*8 + 5 + li*16}" font-size="13" font-weight="500" text-anchor="middle">${escXml(ln)}</text>`;
       });
     }
   });
@@ -504,11 +517,14 @@ document.getElementById('copyImg').onclick = copyTableImage;
 function buildSettingsUI(){
   document.getElementById('icsUrl').value = settings.icsUrl;
   document.getElementById('shopName').value = settings.shopName;
+  const cd = document.getElementById('closedDays');
+  cd.innerHTML = DAY_SHORT.map((lbl,i)=>{
+    const key = DOWKEY[(i+1)%7];
+    return '<label style="font-size:.9rem"><input type="checkbox" data-day="'+key+'"'
+      + (settings.closedDays.includes(key)?' checked':'')+'> '+lbl+'</label>';
+  }).join('');
   const wrap = document.getElementById('colormap');
-  wrap.innerHTML = '';
-  const known = new Set(Object.keys(settings.colormap));
-  const svg = document.getElementById ? svgColors(known) : '';
-  wrap.innerHTML = svg;
+  wrap.innerHTML = svgColors(new Set(Object.keys(settings.colormap)));
 }
 function svgColors(known){
   let h = '<table style="border-collapse:collapse;width:100%">';
@@ -529,9 +545,12 @@ document.getElementById('saveSettings').onclick = ()=>{
   const cm = Object.assign({}, settings.colormap);
   document.querySelectorAll('#colormap select').forEach(s=> cm[s.dataset.color]=s.value);
   cm['other'] = cm['other'] || 'other';
+  const closed = [];
+  document.querySelectorAll('#closedDays input[data-day]').forEach(cb=>{ if (cb.checked) closed.push(cb.dataset.day); });
   settings = Object.assign({}, settings, {
     icsUrl: document.getElementById('icsUrl').value.trim() || DEFAULTS.icsUrl,
     shopName: document.getElementById('shopName').value.trim() || 'Permanences',
+    closedDays: closed,
     colormap: cm
   });
   saveSettings(); renderAll(); info('Réglages enregistrés');

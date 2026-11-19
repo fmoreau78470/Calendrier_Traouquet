@@ -71,3 +71,7 @@ direct → proxy → cache ; ensuite l'Action GitHub maintient le cache seule.
 
 Depuis un mobile, la page marche aussi : plus de capture d'écran à faire
 depuis l'ordinateur.
+
+Jours de fermeture (le lundi chez Traouquet) : la colonne correspondante
+est masquée dans le tableau et l'image ; la case est cochable dans
+⚙️ Réglages si les horaires changent.
