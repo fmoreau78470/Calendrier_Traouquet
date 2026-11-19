@@ -150,14 +150,27 @@ function mondayOf(d){
 }
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function sameDay(a,b){ return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate(); }
-// Semaine "à publier" = celle qui commence le prochain lundi
-let weekStart = mondayOf(addDays(new Date(), 7));
-if (new Date().getDay()===1 && false) {} // conservé simple : toujours la semaine suivante
+// Semaine "à publier" = celle qui commence le prochain mardi (calendrier Traouquet)
+const WEEK_START_JS = 2; // mardi (getDay() : 0=dim, 1=lun, 2=mar, …)
+function startOfWeek(d){
+  const x = new Date(d); x.setHours(0,0,0,0);
+  const diff = (x.getDay() - WEEK_START_JS + 7) % 7;
+  x.setDate(x.getDate() - diff);
+  return x;
+}
+let weekStart = startOfWeek(addDays(new Date(), 7));
 const DAY_NAMES = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
 const DAY_SHORT = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
 // colonnes de jours affichées (les jours de fermeture sont masqués)
-// i = index lundi→dimanche ; clé ICS correspondante = DOWKEY[(i+1)%7]
-function visibleDays(){ return [0,1,2,3,4,5,6].filter(i=>!settings.closedDays.includes(DOWKEY[(i+1)%7])); }
+// colonnes affichées : les 7 jours de la fenêtre (mardi→lundi) sans les jours fermés
+function visibleDays(){
+  const out = [];
+  for (let i=0;i<7;i++){
+    const d = addDays(weekStart,i);
+    if (!settings.closedDays.includes(DOWKEY[d.getDay()])) out.push(i);
+  }
+  return out;
+}
 
 /* ================= Chargement ICS ================= */
 let icsText = localStorage.getItem('perma.ics') || null;
@@ -338,7 +351,7 @@ function renderAll(){
   let html = '<table><thead><tr><th style="min-width:6.5rem">Créneau</th>';
   for (const i of vis){
     const d = addDays(ws,i);
-    html += '<th>'+DAY_NAMES[i]+'<br><span class="muted">'+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'</span></th>';
+    html += '<th>'+DAY_NAMES[(d.getDay()+6)%7]+'<br><span class="muted">'+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'</span></th>';
   }
   html += '</tr></thead><tbody>';
   for (const s of slots){
@@ -373,22 +386,24 @@ function buildMessage(weekEvs){
   const head = 'Bonjour à toutes et à tous,\n'
     + 'voici le planning de la semaine du '+rangeDF.format(ws)+' au '+rangeDF.format(addDays(ws,6))+'\n';
 
-  // un point rouge par créneau sans joker (rouge)
+  // un point rouge par créneau sans joker (rouge), sur les jours ouverts
   const reds = [];
-  for (let i=0;i<7;i++){
+  for (const i of visibleDays()){
     const d = addDays(ws,i);
+    const di = (d.getDay()+6)%7;               // vrai index du jour (lundi=0)
     const day = weekEvs.filter(e=> sameDay(e.date,d) && statusOf(e)==='red')
                        .sort((a,b)=>a.startT.localeCompare(b.startT));
     const seen = new Set();
     for (const e of day){
       const slot = fmtSlot(e.startT)+' → '+fmtSlot(e.endT||e.startT);
       if (seen.has(slot)) continue; seen.add(slot);
-      reds.push('🔴 *'+DAY_NAMES[i]+' '+pad2(d.getDate())+'* · '+slot);
+      reds.push('🔴 *'+DAY_NAMES[di]+' '+pad2(d.getDate())+'* · '+slot);
     }
   }
   if (!reds.length)
     return head + '\n✅ Toutes les permanences sont pourvues, merci à toutes et à tous ! 🎉🎉';
-  return head + '\n' + reds.join('\n') + '\n\n🙏 Merci d\'avance !';
+  return head + '\nUn.e joker est recherché.e pour les créneaux suivants :\n'
+    + reds.join('\n') + '\n\n🙏 Merci d\'avance !';
 }
 
 /* ================= Tableau en image (copie/download) ================= */
@@ -423,7 +438,7 @@ function buildSvg(weekEvs){
     const d = addDays(ws,i);
     const cx = SLOT_W + vis.indexOf(i)*DAY_W;
     s += `<rect x="${cx}" y="${y0}" width="${DAY_W}" height="${HEAD_H}" stroke="#d9dde3" fill="none"/>`;
-    s += `<text x="${cx+DAY_W/2}" y="${y0+19}" font-size="13" font-weight="bold" text-anchor="middle">${DAY_NAMES[i]}</text>`;
+    s += `<text x="${cx+DAY_W/2}" y="${y0+19}" font-size="13" font-weight="bold" text-anchor="middle">${DAY_NAMES[(d.getDay()+6)%7]}</text>`;
     s += `<text x="${cx+DAY_W/2}" y="${y0+36}" font-size="11" fill="#667" text-anchor="middle">${pad2(d.getDate())}/${pad2(d.getMonth()+1)}</text>`;
   }
   rows.forEach((r,ri)=>{
@@ -500,7 +515,7 @@ function goWeek(n){ weekStart = addDays(weekStart, 7*n); renderAll(); }
 let icsBusy = false;
 document.getElementById('prevWeek').onclick = ()=>goWeek(-1);
 document.getElementById('nextWeek').onclick = ()=>goWeek(1);
-document.getElementById('thisWeek').onclick = ()=>{ weekStart = mondayOf(addDays(new Date(),7)); renderAll(); };
+document.getElementById('thisWeek').onclick = ()=>{ weekStart = startOfWeek(addDays(new Date(),7)); renderAll(); };
 document.getElementById('refresh').onclick = async (ev)=>{
   if (icsBusy) return; icsBusy = true;
   ev.target.textContent = '⏳ …';
