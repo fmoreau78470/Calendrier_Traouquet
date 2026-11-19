@@ -35,7 +35,7 @@ robuste à la plus simple :
 |---|---|---|
 | **Cache dans le dépôt + GitHub Action** (retenu) | `.github/workflows/update-ics.yml` : tous les samedis 10 h (ET génération du message), une Action télécharge l'ICS et le commite ; la page github.io lit ce cache **same-origin** (CORS OK) | ★★★ |
 | Proxy CORS public (api.cors.lol, allorigins…) | Aucune | ★ (instable, mais en secours automatique) |
-| Copier/coller ou dépôt manuel du fichier .ics dans l'app | Aucune (secours en local) | ★★ |
+| Cache & proxys automatiques | Aucune | — |
 
 La première fois, une action manuelle « 🔄 Récupérer l'ICS » utilise la chaîne
 direct → proxy → cache ; ensuite l'Action GitHub maintient le cache seule.
