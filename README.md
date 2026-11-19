@@ -17,11 +17,12 @@ Framagenda (CalDAV public, lecture seule)
         │
         ▼
 2) Le navigateur télécharge l'ICS, le parse et rend :
-   • le tableau de la semaine (Vert / Jaune / Rouge)
-   • le message WhatsApp prêt à copier (bouton « Copier »)
+   • le tableau de la semaine (Vert / Jaune / Rouge), copiable en
+     image PNG d'un clic (bouton « 🖼️ Copier le tableau en image »)
+   • le message WhatsApp listant uniquement les jokers recherchés
         │
         ▼
-3) Tu colles dans le groupe WhatsApp (le seul geste manuel restant)
+3) Tu colles image et/ou message dans le groupe WhatsApp (seuls gestes manuels)
 ```
 
 ### Le point bloquant et sa solution
@@ -64,8 +65,9 @@ direct → proxy → cache ; ensuite l'Action GitHub maintient le cache seule.
 1. Ouvrir `index.html` (ou l'URL GitHub Pages après push).
 2. La semaine affichée par défaut est **la semaine suivante** (le message
    est envoyé le week-end qui précède) ; naviguer avec ‹ › si besoin.
-3. Ajuster si besoin le message dans la zone de texte.
-4. **Copier** → coller dans le groupe WhatsApp.
+3. **🖼️ Copier le tableau en image** et/ou **📋 Copier le message**
+   (le message liste uniquement les jokers recherchés).
+4. Coller dans le groupe WhatsApp ; ajouter éventuellement un commentaire.
 
-Depuis un mobile, la page fonctionne aussi : plus de capture d'écran
-impossible à faire.
+Depuis un mobile, la page marche aussi : plus de capture d'écran à faire
+depuis l'ordinateur.

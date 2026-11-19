@@ -75,6 +75,7 @@
     <textarea id="message" spellcheck="false"></textarea>
     <div class="actions" id="msgActions">
       <button class="primary" id="copy">📋 Copier le message</button>
+      <button id="copyImg">🖼️ Copier le tableau en image</button>
       <a id="waLink" href="#" target="_blank" rel="noopener"><button type="button">💬 Ouvrir WhatsApp</button></a>
       <span id="copyInfo" class="muted"></span>
     </div>
@@ -241,13 +242,14 @@ function eventsForWeek(evs, ws){
                       || [DOWKEY[e.date.getDay()]];
         const days = byday.split(',').map(s=>DOWIDX[s.trim()]);
         const interval = +(/INTERVAL=(\d+)/i.exec(e.rrule)?.[1] || 1);
-        const until = /UNTIL=(\d{8})/i.exec(e.rrule)?.[1] || null;
+        const untilInst = untilInstant(e.rrule);
         const anchor = mondayOf(e.date);
         for (let i=0;i<7;i++){
           const d = addDays(ws, i);
           if (!days.includes((d.getDay()+6)%7)) continue;
           if (d < dateOnly(e.date)) continue;
-          if (until && ymd(d) > until) continue;
+          // UNTIL est en UTC dans l'ICS : comparer l'instant réel de l'occurrence
+          if (untilInst && occInstant(d, e.startT) > untilInst) continue;
           if (interval>1 && Math.round((mondayOf(d)-anchor)/(7*864e5)) % interval !== 0) continue;
           dates.push(d);
         }
@@ -264,6 +266,28 @@ function eventsForWeek(evs, ws){
   }
   return out;
 }
+/* --- conversion d'heure Paris <-> UTC (pour le UNTIL des récurrences) --- */
+function parisOffsetAt(u){ // décalage de Europe/Paris à l'instant u (ms)
+  const parts = new Intl.DateTimeFormat('en-US', {timeZone:'Europe/Paris', hour12:false,
+    year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'})
+    .formatToParts(new Date(u))
+    .reduce((a,x)=>{ if (x.type!=='literal') a[x.type]=x.value; return a; }, {});
+  return Date.UTC(+parts.year, parts.month-1, +parts.day, +parts.hour, +parts.minute, +parts.second) - u;
+}
+// instant UTC d'une occurrence (d = jour Paris, startT = heure affichée)
+function occInstant(d, startT){
+  const w = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(),
+                     +startT.slice(0,2) || 0, +startT.slice(3,5) || 0);
+  return w - parisOffsetAt(new Date(w));
+}
+function untilInstant(rrule){
+  const m = /UNTIL=(\d{8})(?:T(\d{6})(Z)?)?/i.exec(rrule);
+  if (!m) return null;
+  const t = m[2] || '000000';
+  const asUTC = Date.UTC(+m[1].slice(0,4), +m[1].slice(4,6)-1, +m[1].slice(6,8),
+                         +t.slice(0,2), +t.slice(2,4), +t.slice(4,6));
+  return m[3]==='Z' ? asUTC : asUTC - parisOffsetAt(new Date(asUTC));
+}
 const DOWIDX = {MO:0,TU:1,WE:2,TH:3,FR:4,SA:5,SU:6};
 const DOWKEY = ['SU','MO','TU','WE','TH','FR','SA'];
 function cancelledTxt(s){ return /^\s*$/.test(s||''); }
@@ -276,6 +300,7 @@ function statusOf(ev){
 }
 
 /* ================= Rendu ================= */
+let currentWeekEvs = [];
 function renderAll(){
   if (!icsText){ document.getElementById('tableWrap').innerHTML = '<p class="muted">Aucun calendrier chargé. Cliquez sur « 🔄 Récupérer l\'ICS » ou collez un .ics dans les réglages.</p>'; updateMessage([]); return; }
   const ws = weekStart, we = addDays(ws,6);
@@ -288,6 +313,7 @@ function renderAll(){
   const evs = parseIcs(icsText);
   const weekEvs = eventsForWeek(evs, ws);
   weekEvs.sort((a,b)=> a.date- b.date || a.startT.localeCompare(b.startT));
+  currentWeekEvs = weekEvs;
 
   // créneaux (lignes) distincts de la semaine
   const slots = [...new Set(weekEvs.map(e=>e.startT+'-'+(e.endT||e.startT)))]
@@ -324,7 +350,8 @@ function renderAll(){
   updateMessage(weekEvs);
 }
 
-/* ================= Message WhatsApp ================= */
+/* ================= Message WhatsApp (jokers recherchés uniquement) ================= */
+function pad2(n){ return String(n).padStart(2,'0'); }
 function buildMessage(weekEvs){
   const ws = weekStart;
   const rangeDF = new Intl.DateTimeFormat('fr-FR',{day:'numeric',month:'long'});
@@ -332,32 +359,118 @@ function buildMessage(weekEvs){
   const head = '🛒 *'+settings.shopName+'*\n'
     + '📅 Semaine du '+rangeDF.format(ws)+' au '+rangeDF.format(addDays(ws,6))+' '+yrDF.format(addDays(ws,6))+'\n';
 
-  const byDay = [[],[],[],[],[],[],[]];
-  for (const e of weekEvs) byDay[(e.date.getDay()+6)%7].push(e);
-  for (const arr of byDay) arr.sort((a,b)=>a.startT.localeCompare(b.startT));
-
+  // créneaux sans joker (rouge), un par jour+créneau
   const reds = [];
-  const lines = [];
   for (let i=0;i<7;i++){
-    if (!byDay[i].length) continue;
     const d = addDays(ws,i);
-    lines.push('*'+DAY_NAMES[i]+' '+String(d.getDate()).padStart(2,'0')+'*');
-    for (const e of byDay[i]){
-      const st = statusOf(e);
+    const day = weekEvs.filter(e=> sameDay(e.date,d) && statusOf(e)==='red')
+                       .sort((a,b)=>a.startT.localeCompare(b.startT));
+    const seen = new Set();
+    for (const e of day){
       const slot = fmtSlot(e.startT)+' → '+fmtSlot(e.endT||e.startT);
-      const name = e.summ==='' ? '' : e.summ;
-      if (st==='red'){ reds.push(DAY_NAMES[i]+' '+slot); lines.push('  🔴 *Joker recherché* · '+slot+(name&&name!=='???'?' - '+name:'')); }
-      else if (st==='yellow') lines.push('  🟡 '+slot+' — '+name+' _(joker, merci !_)');
-      else if (st==='green') lines.push('  🟢 '+slot+' — '+name);
-      else lines.push('  ℹ️ '+slot+(name?' — '+name:''));
+      if (seen.has(slot)) continue; seen.add(slot);
+      reds.push('• *'+DAY_NAMES[i]+' '+pad2(d.getDate())+'* · '+slot);
     }
   }
-  let tail;
-  if (reds.length) tail = '\n🙋 *Joker recherché* : '+reds.join(' · ')+'\n\n(Ce message est mis à jour chaque week-end. La permanence compte sur vous !)';
-  else tail = '\n✅ Toutes les permanences sont pourvues, merci les permanents et jokers ! 🎉';
+  const tail = '\n\nRéponds à ce message si tu peux prendre un créneau 🙏';
+  if (!reds.length)
+    return head + '\n✅ Toutes les permanences sont pourvues, merci à toutes et à tous ! 🎉';
+  return head + '\n🔴 *Jokers recherchés :*\n' + reds.join('\n') + tail;
+}
 
-  const leg = '\n🟢 permanent · 🟡 joker proposé · 🔴 joker recherché';
-  return head + '\n' + lines.join('\n') + tail + leg + '\n';
+/* ================= Tableau en image (copie/download) ================= */
+const ROW_H = 52, SLOT_W = 92, DAY_W = 122, HEAD_H = 46, TITLE_H = 34, LEG_H = 30;
+function escXml(s){ return s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function wrapText(s, max){
+  const words = s.split(' '); const lines = []; let cur = '';
+  for (const w of words){
+    if ((cur+' '+w).trim().length <= max) cur = (cur+' '+w).trim();
+    else { if (cur) lines.push(cur); cur = w; }
+  }
+  if (cur) lines.push(cur);
+  return lines.slice(0,3);
+}
+function buildSvg(weekEvs){
+  const ws = weekStart;
+  const rows = [...new Set(weekEvs.map(e=>e.startT+'-'+(e.endT||e.startT)))]
+    .sort((a,b)=> a.slice(0,5).localeCompare(b.slice(0,5)));
+  const W = SLOT_W + 7*DAY_W, H = TITLE_H + HEAD_H + rows.length*ROW_H + LEG_H;
+  const PAL = {green:'#b8e0a4', yellow:'#ffef99', red:'#f5a9a9', other:'#cfd8e8', empty:'#f6f7f9'};
+  const rangeDF = new Intl.DateTimeFormat('fr-FR',{day:'numeric',month:'long'});
+  const yrDF = new Intl.DateTimeFormat('fr-FR',{year:'numeric'});
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Segoe UI,Helvetica,Arial,sans-serif">`;
+  s += `<rect width="${W}" height="${H}" fill="#ffffff"/>`;
+  s += `<text x="${W/2}" y="21" font-size="15" font-weight="bold" text-anchor="middle">🛒 ${escXml(settings.shopName)} — semaine du ${rangeDF.format(ws)} au ${rangeDF.format(addDays(ws,6))} ${yrDF.format(addDays(ws,6))}</text>`;
+  const y0 = TITLE_H;
+  s += `<rect x="0" y="${y0}" width="${W}" height="${HEAD_H}" fill="#eef1f5"/>`;
+  s += `<rect x="0" y="${y0}" width="${SLOT_W}" height="${HEAD_H}" stroke="#d9dde3" fill="none"/>`;
+  s += `<text x="${SLOT_W/2}" y="${y0+HEAD_H/2+5}" font-size="13" font-weight="bold" text-anchor="middle">Créneau</text>`;
+  for (let i=0;i<7;i++){
+    const d = addDays(ws,i), x = SLOT_W+i*DAY_W;
+    s += `<rect x="${x}" y="${y0}" width="${DAY_W}" height="${HEAD_H}" stroke="#d9dde3" fill="none"/>`;
+    s += `<text x="${x+DAY_W/2}" y="${y0+19}" font-size="13" font-weight="bold" text-anchor="middle">${DAY_NAMES[i]}</text>`;
+    s += `<text x="${x+DAY_W/2}" y="${y0+36}" font-size="11" fill="#667" text-anchor="middle">${pad2(d.getDate())}/${pad2(d.getMonth()+1)}</text>`;
+  }
+  rows.forEach((r,ri)=>{
+    const [st,en] = r.split('-');
+    const y = y0+HEAD_H+ri*ROW_H;
+    s += `<rect x="0" y="${y}" width="${SLOT_W}" height="${ROW_H}" fill="#f3f4f6" stroke="#d9dde3"/>`;
+    s += `<text x="${SLOT_W/2}" y="${y+ROW_H/2+5}" font-size="13" font-weight="bold" text-anchor="middle">${fmtSlot(st)} → ${fmtSlot(en)}</text>`;
+    for (let i=0;i<7;i++){
+      const d = addDays(ws,i), x = SLOT_W+i*DAY_W;
+      const cell = weekEvs.filter(e=> sameDay(e.date,d) && e.startT===st && (e.endT||'')===en);
+      if (!cell.length){
+        s += `<rect x="${x}" y="${y}" width="${DAY_W}" height="${ROW_H}" fill="${PAL.empty}" stroke="#d9dde3"/>`;
+        s += `<text x="${x+DAY_W/2}" y="${y+ROW_H/2+4}" font-size="12" fill="#99a" text-anchor="middle">—</text>`;
+        continue;
+      }
+      const sts = cell.map(statusOf);
+      const fill = PAL[sts.includes('red')?'red':sts.includes('yellow')?'yellow':sts.includes('green')?'green':'other'];
+      s += `<rect x="${x}" y="${y}" width="${DAY_W}" height="${ROW_H}" fill="${fill}" stroke="#d9dde3"/>`;
+      const names = cell.map(e=>e.summ).join(', ');
+      wrapText(names, 17).forEach((ln,li)=>{
+        s += `<text x="${x+DAY_W/2}" y="${y+ROW_H/2 - (wrapText(names,17).length-1)*8 + 5 + li*16}" font-size="13" font-weight="500" text-anchor="middle">${escXml(ln)}</text>`;
+      });
+    }
+  });
+  const ly = y0+HEAD_H+rows.length*ROW_H+18;
+  s += `<g font-size="12">`
+    + `<rect x="10" y="${ly-11}" width="13" height="13" rx="3" fill="${PAL.green}"/><text x="28" y="${ly}">Permanent</text>`
+    + `<rect x="120" y="${ly-11}" width="13" height="13" rx="3" fill="${PAL.yellow}"/><text x="138" y="${ly}">Joker s'est proposé</text>`
+    + `<rect x="300" y="${ly-11}" width="13" height="13" rx="3" fill="${PAL.red}"/><text x="318" y="${ly}">Joker recherché</text>`
+    + `</g>`;
+  return s + '</svg>';
+}
+async function copyTableImage(){
+  try{
+    const svg = buildSvg(currentWeekEvs||[]);
+    const W  = +(/width="(\d+)"/.exec(svg)?.[1]  || 800);
+    const H  = +(/height="(\d+)"/.exec(svg)?.[1] || 400);
+    const blob = new Blob([svg], {type:'image/svg+xml'});
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    await new Promise((res,rej)=>{ img.onload=res; img.onerror=()=>rej(new Error('img')); img.src=url; });
+    const c = document.createElement('canvas'); c.width = W*2; c.height = H*2; // 2x = netteté WhatsApp
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0,0,c.width,c.height);
+    ctx.scale(2,2); ctx.drawImage(img,0,0);
+    URL.revokeObjectURL(url);
+    const png = await new Promise(r=> c.toBlob(r,'image/png'));
+    if (navigator.clipboard && window.ClipboardItem){
+      try{
+        await navigator.clipboard.write([new ClipboardItem({'image/png': png})]);
+        info('✅ Image copiée — colle-la dans le groupe !');
+        return;
+      }catch(e){ /* secours : téléchargement */ }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(png);
+    a.download = 'permanences-' + weekStart.toISOString().slice(0,10) + '.png';
+    a.click();
+    info('⬇️ Image téléchargée (presse-papiers indisponible sur ce navigateur)');
+  }catch(e){
+    info('❌ La copie en image a échoué : '+e.message);
+  }
 }
 
 function updateMessage(weekEvs){
@@ -385,6 +498,7 @@ document.getElementById('copy').onclick = async ()=>{
   catch(e){ ta.select(); document.execCommand('copy'); info('✅ Copié (fallback)'); }
 };
 function info(t){ const el=document.getElementById('copyInfo'); el.textContent=t; setTimeout(()=>el.textContent='',2500); }
+document.getElementById('copyImg').onclick = copyTableImage;
 
 // réglages
 function buildSettingsUI(){
