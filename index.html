@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Permanences Traouquet — message hebdo WhatsApp</title>
+<style>
+  :root{
+    --st-green:#b8e0a4; --st-yellow:#ffef99; --st-red:#f5a9a9;
+    --st-other:#cfd8e8; --bg:#f6f7f9; --card:#fff; --ink:#222;
+    --line:#d9dde3; --accent:#4a6da7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  header{background:var(--card);border-bottom:1px solid var(--line);padding:.8rem 1rem;display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;justify-content:space-between}
+  header h1{font-size:1.05rem;margin:0}
+  .weeknav{display:flex;align-items:center;gap:.4rem}
+  button{font:inherit;padding:.4rem .8rem;border:1px solid var(--line);border-radius:8px;background:var(--card);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button:active{transform:translateY(1px)}
+  #weekLabel{font-weight:600;min-width:16rem;text-align:center}
+  main{max-width:980px;margin:1rem auto;padding:0 1rem;display:flex;flex-direction:column;gap:1rem}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:1rem;overflow-x:auto}
+  .muted{color:#667;font-size:.85rem}
+  table{border-collapse:collapse;width:100%;min-width:640px}
+  th,td{border:1px solid var(--line);padding:.45rem .5rem;font-size:.9rem;text-align:center;vertical-align:top}
+  th{background:#eef1f5;font-weight:600}
+  td.slot{background:#f3f4f6;font-weight:600;white-space:nowrap}
+  td.st-green{background:var(--st-green)}
+  td.st-yellow{background:var(--st-yellow)}
+  td.st-red{background:var(--st-red)}
+  td.st-other{background:var(--st-other)}
+  td.st-empty{color:#99a}
+  .names{display:block;font-weight:500}
+  #message{width:100%;min-height:14em;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;border:1px solid var(--line);border-radius:8px;padding:.6rem}
+  .actions{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-top:.6rem}
+  details{margin-top:0}
+  details summary{cursor:pointer;font-weight:600}
+  .field{margin:.5rem 0}
+  .field label{display:block;font-size:.85rem;color:#556;margin-bottom:.2rem}
+  .field input[type=text],.field select,.field textarea{width:100%;padding:.4rem;border:1px solid var(--line);border-radius:6px;font:inherit}
+  .legend{display:flex;gap:1rem;flex-wrap:wrap;font-size:.85rem;margin:.4rem 0}
+  .dot{display:inline-block;width:.9em;height:.9em;border-radius:3px;margin-right:.3rem;vertical-align:-.05em}
+  #srcInfo{font-size:.8rem;color:#667}
+  .ok{color:#2c7a2c}.err{color:#b03030}
+  @media print{ header,.actions,details,#msgActions{display:none} body{background:#fff} .card{border:none} }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛒 Permanences Traouquet</h1>
+  <div class="weeknav">
+    <button id="prevWeek" title="Semaine précédente">‹</button>
+    <span id="weekLabel"></span>
+    <button id="nextWeek" title="Semaine suivante">›</button>
+    <button id="thisWeek" title="Aller à la semaine à publier">Semaine à publier</button>
+  </div>
+  <button id="refresh">🔄 Récupérer l'ICS</button>
+</header>
+
+<main>
+  <section class="card">
+    <div class="legend">
+      <span><span class="dot" style="background:var(--st-green)"></span>Permanent</span>
+      <span><span class="dot" style="background:var(--st-yellow)"></span>Joker s'est proposé</span>
+      <span><span class="dot" style="background:var(--st-red)"></span>Joker recherché</span>
+      <span><span class="dot" style="background:var(--st-other)"></span>Autre / infos</span>
+    </div>
+    <div id="tableWrap"></div>
+    <p id="srcInfo"></p>
+  </section>
+
+  <section class="card">
+    <h2 style="font-size:1rem;margin:.2rem 0 .6rem">Message WhatsApp</h2>
+    <textarea id="message" spellcheck="false"></textarea>
+    <div class="actions" id="msgActions">
+      <button class="primary" id="copy">📋 Copier le message</button>
+      <a id="waLink" href="#" target="_blank" rel="noopener"><button type="button">💬 Ouvrir WhatsApp</button></a>
+      <span id="copyInfo" class="muted"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>⚙️ Réglages</summary>
+      <div class="field">
+        <label for="icsUrl">URL d'export ICS du calendrier (lien de partage Framagenda, lecture seule)</label>
+        <input type="text" id="icsUrl">
+      </div>
+      <p class="muted">Correspondance couleur Framagenda → signification&nbsp;:</p>
+      <div id="colormap"></div>
+      <div class="field">
+        <label for="shopName">Nom affiché dans le message</label>
+        <input type="text" id="shopName">
+      </div>
+      <div class="actions">
+        <button id="saveSettings" class="primary">Enregistrer les réglages</button>
+        <button id="pasteBtn">📥 Utiliser un .ics collé</button>
+      </div>
+      <div class="field" id="pasteZone" style="display:none">
+        <label for="pasteArea">Collez ici le contenu du fichier .ics</label>
+        <textarea id="pasteArea" rows="4"></textarea>
+        <button id="pasteLoad">Charger</button>
+      </div>
+    </details>
+  </section>
+</main>
+
+<script>
+'use strict';
+
+/* ================= Réglages ================= */
+const DEFAULTS = {
+  icsUrl: 'https://framagenda.org/remote.php/dav/public-calendars/5m33p3SsirPzZPq2/?export',
+  shopName: 'Permanences Traouquet',
+  colormap: {
+    cadetblue:     'green',
+    khaki:         'yellow',
+    palevioletred: 'red',
+    darkslateblue: 'other',
+    other:         'other'
+  }
+};
+let settings = loadSettings();
+function loadSettings(){
+  try { const s = JSON.parse(localStorage.getItem('perma.settings'));
+        if (s) return Object.assign({}, DEFAULTS, s, {colormap: Object.assign({}, DEFAULTS.colormap, s.colormap||{})}); }
+  catch(e){}
+  return JSON.parse(JSON.stringify(DEFAULTS));
+}
+function saveSettings(){ localStorage.setItem('perma.settings', JSON.stringify(settings)); }
+
+/* ================= Semaines ================= */
+function mondayOf(d){
+  const x = new Date(d); x.setHours(0,0,0,0);
+  const wd = (x.getDay()+6)%7;           // lundi = 0
+  x.setDate(x.getDate()-wd);
+  return x;
+}
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function sameDay(a,b){ return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate(); }
+// Semaine "à publier" = celle qui commence le prochain lundi
+let weekStart = mondayOf(addDays(new Date(), 7));
+if (new Date().getDay()===1 && false) {} // conservé simple : toujours la semaine suivante
+const DAY_NAMES = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+
+/* ================= Chargement ICS ================= */
+let icsText = localStorage.getItem('perma.ics') || null;
+let srcUsed = 'cache local';
+
+function proxied(url){
+  const enc = encodeURIComponent(url);
+  return [
+    url,                                          // direct (si un jour CORS ok)
+    'https://api.cors.lol/?url=' + enc,           // 1er proxy public
+    'https://api.allorigins.win/raw?url=' + enc,  // 2e proxy public
+    'ics/perma.ics'                               // cache same-origin (GitHub Pages)
+  ];
+}
+async function fetchIcs(){
+  const errs = [];
+  for (const u of proxied(settings.icsUrl)){
+    try{
+      const r = await fetch(u, {redirect:'follow'});
+      if (!r.ok) throw new Error('HTTP '+r.status);
+      let t = await r.text();
+      if (!/BEGIN:VCALENDAR/i.test(t)) throw new Error('contenu non ICS');
+      icsText = t; srcUsed = u===settings.icsUrl ? 'Framagenda (direct)'
+              : u.endsWith('perma.ics') ? 'cache du dépôt'
+              : new URL(u).host;
+      localStorage.setItem('perma.ics', t);
+      renderAll();
+      return;
+    }catch(e){ errs.push(e.message); }
+  }
+  if (!icsText) alert('Impossible de récupérer l\'ICS.\n' + errs.join('\n'));
+  else document.getElementById('srcInfo').innerHTML +=
+    ' <span class="err">(rafraîchissement impossible : '+errs.join(', ')+' — cache utilisé)</span>';
+}
+
+/* ================= Parseur ICS ================= */
+function unfold(text){ return text.replace(/\r\n[ \t]/g,'').replace(/\r/g,''); }
+function parseIcs(text){
+  const t = unfold(text);
+  const blocks = [];
+  const re = /BEGIN:VEVENT([\s\S]*?)END:VEVENT/g; let m;
+  while ((m = re.exec(t))) blocks.push(m[1]);
+  const evs = [];
+  for (const b of blocks){
+    const prop = (name)=>{
+      const r = new RegExp('^'+name+'(;[^:\n]*)?:([^\n]*)','im');
+      const mm = b.match(r); return mm ? mm[2].trim() : null;
+    };
+    const params = (name)=>{
+      const r = new RegExp('^'+name+'(;[^:\n]*)?:','im');
+      const mm = b.match(r); return mm ? mm[1] : '';
+    };
+    const uid   = prop('UID')||'';
+    const summ  = (prop('SUMMARY')||'').replace(/\\,/g,',').replace(/\\;/g,';').replace(/\\\\/g,'\\');
+    const col   = (prop('COLOR')||'').toLowerCase();
+    const rrule = prop('RRULE');
+    const stat  = prop('STATUS');
+    const ridRaw= (prop('RECURRENCE-ID')||'').slice(0,8);
+    const isDate= /VALUE=DATE/.test(params('DTSTART'));
+    const dsRaw = prop('DTSTART'); if(!dsRaw) continue;
+    const d     = iDate(dsRaw);
+    if (!d) continue;
+    const deRaw = prop('DTEND') || '';
+    const dEnd  = deRaw ? iDate(deRaw) : null;
+    evs.push({uid, summ, col, rrule, stat, rid: ridRaw,
+      date: d,           // Date locale (heure affichée = heure écrite)
+      endT: dEnd ? hm(dEnd) : (d ? hm(d) : ''),
+      startT: d ? hm(d) : '',
+      allDay: isDate});
+  }
+  return evs;
+}
+function iDate(raw){ // 20261108T170000 (TZID local => heure écrite) ou 20261108
+  const m = raw.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?)?/);
+  if(!m) return null;
+  const d = new Date(+m[1], +m[2]-1, +m[3], +(m[4]||0), +(m[5]||0), 0);
+  return d;
+}
+function hm(d){ return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
+function fmtSlot(s){ const p = s.split(':'); return (+p[0])+'h' + (p[1]==='00' ? '' : p[1]); }
+
+// Renvoie les occurrences adaptées à la semaine [weekStart, weekStart+6]
+function eventsForWeek(evs, ws){
+  const weDrug = addDays(ws,6);
+  const out = [];
+  const masters = [], exceptions = new Map();
+  for (const e of evs){
+    if (e.rid) exceptions.set(e.uid+'|'+e.rid, e); else masters.push(e);
+  }
+  for (const e of masters){
+    const dates = [];
+    if (e.rrule){
+      const freq = /FREQ=([^;]+)/i.exec(e.rrule)?.[1] || 'weekly';
+      if (freq.toLowerCase()==='weekly'){
+        const byday = /BYDAY=([A-Z,]+)/i.exec(e.rrule)?.[1]
+                      || [DOWKEY[e.date.getDay()]];
+        const days = byday.split(',').map(s=>DOWIDX[s.trim()]);
+        const interval = +(/INTERVAL=(\d+)/i.exec(e.rrule)?.[1] || 1);
+        const until = /UNTIL=(\d{8})/i.exec(e.rrule)?.[1] || null;
+        const anchor = mondayOf(e.date);
+        for (let i=0;i<7;i++){
+          const d = addDays(ws, i);
+          if (!days.includes((d.getDay()+6)%7)) continue;
+          if (d < dateOnly(e.date)) continue;
+          if (until && ymd(d) > until) continue;
+          if (interval>1 && Math.round((mondayOf(d)-anchor)/(7*864e5)) % interval !== 0) continue;
+          dates.push(d);
+        }
+      }
+    } else {
+      if (e.date >= dateOnly(ws) && e.date <= dateOnly(weDrug)) dates.push(e.date);
+    }
+    for (const d of dates){
+      const exc = exceptions.get(e.uid+'|'+ymd(d));
+      const kept = exc && exc.stat!=='CANCELLED' && !cancelledTxt(exc.summ) ? exc : null;
+      if (exc && !kept) continue;              // occurrence annulée
+      out.push(kept || Object.assign({}, e, {date:d}));
+    }
+  }
+  return out;
+}
+const DOWIDX = {MO:0,TU:1,WE:2,TH:3,FR:4,SA:5,SU:6};
+const DOWKEY = ['SU','MO','TU','WE','TH','FR','SA'];
+function cancelledTxt(s){ return /^\s*$/.test(s||''); }
+function dateOnly(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+function ymd(d){ return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'); }
+
+function statusOf(ev){
+  const st = settings.colormap[ev.col] || settings.colormap['other'] || 'other';
+  return st;
+}
+
+/* ================= Rendu ================= */
+function renderAll(){
+  if (!icsText){ document.getElementById('tableWrap').innerHTML = '<p class="muted">Aucun calendrier chargé. Cliquez sur « 🔄 Récupérer l\'ICS » ou collez un .ics dans les réglages.</p>'; updateMessage([]); return; }
+  const ws = weekStart, we = addDays(ws,6);
+  // libellé de semaine
+  const moDF = new Intl.DateTimeFormat('fr-FR',{day:'numeric',month:'long'});
+  const yrDF = new Intl.DateTimeFormat('fr-FR',{year:'numeric'});
+  document.getElementById('weekLabel').textContent =
+    moDF.format(ws) + ' → ' + moDF.format(we) + ' ' + yrDF.format(we);
+
+  const evs = parseIcs(icsText);
+  const weekEvs = eventsForWeek(evs, ws);
+  weekEvs.sort((a,b)=> a.date- b.date || a.startT.localeCompare(b.startT));
+
+  // créneaux (lignes) distincts de la semaine
+  const slots = [...new Set(weekEvs.map(e=>e.startT+'-'+(e.endT||e.startT)))]
+    .sort((a,b)=> a.slice(0,5).localeCompare(b.slice(0,5)));
+
+  // table
+  let html = '<table><thead><tr><th style="min-width:6.5rem">Créneau</th>';
+  for (let i=0;i<7;i++){
+    const d = addDays(ws,i);
+    html += '<th>'+DAY_NAMES[i]+'<br><span class="muted">'+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'</span></th>';
+  }
+  html += '</tr></thead><tbody>';
+  for (const s of slots){
+    const [st,en] = s.split('-');
+    html += '<tr><td class="slot">'+fmtSlot(st)+' → '+fmtSlot(en)+'</td>';
+    for (let i=0;i<7;i++){
+      const d = addDays(ws,i);
+      const cell = weekEvs.filter(e=> sameDay(e.date,d) && e.startT===st && (e.endT||'')===en);
+      if (!cell.length){ html += '<td class="st-empty">—</td>'; continue; }
+      const names = cell.map(e=> escapeHtml(e.summ)).join(', ');
+      // statut dominant (rouge prioritaire s'il y a un joker recherché non couvert)
+      const sts = cell.map(statusOf);
+      const cls = sts.includes('red') ? 'st-red' : sts.includes('yellow') ? 'st-yellow'
+                : sts.includes('green') ? 'st-green' : 'st-other';
+      html += '<td class="'+cls+'"><span class="names">'+names+'</span></td>';
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  document.getElementById('tableWrap').innerHTML = html;
+
+  document.getElementById('srcInfo').textContent =
+    'Données : '+srcUsed+' · calendrier lecture seule (les adhérents ne peuvent rien y modifier).';
+  updateMessage(weekEvs);
+}
+
+/* ================= Message WhatsApp ================= */
+function buildMessage(weekEvs){
+  const ws = weekStart;
+  const rangeDF = new Intl.DateTimeFormat('fr-FR',{day:'numeric',month:'long'});
+  const yrDF = new Intl.DateTimeFormat('fr-FR',{year:'numeric'});
+  const head = '🛒 *'+settings.shopName+'*\n'
+    + '📅 Semaine du '+rangeDF.format(ws)+' au '+rangeDF.format(addDays(ws,6))+' '+yrDF.format(addDays(ws,6))+'\n';
+
+  const byDay = [[],[],[],[],[],[],[]];
+  for (const e of weekEvs) byDay[(e.date.getDay()+6)%7].push(e);
+  for (const arr of byDay) arr.sort((a,b)=>a.startT.localeCompare(b.startT));
+
+  const reds = [];
+  const lines = [];
+  for (let i=0;i<7;i++){
+    if (!byDay[i].length) continue;
+    const d = addDays(ws,i);
+    lines.push('*'+DAY_NAMES[i]+' '+String(d.getDate()).padStart(2,'0')+'*');
+    for (const e of byDay[i]){
+      const st = statusOf(e);
+      const slot = fmtSlot(e.startT)+' → '+fmtSlot(e.endT||e.startT);
+      const name = e.summ==='' ? '' : e.summ;
+      if (st==='red'){ reds.push(DAY_NAMES[i]+' '+slot); lines.push('  🔴 *Joker recherché* · '+slot+(name&&name!=='???'?' - '+name:'')); }
+      else if (st==='yellow') lines.push('  🟡 '+slot+' — '+name+' _(joker, merci !_)');
+      else if (st==='green') lines.push('  🟢 '+slot+' — '+name);
+      else lines.push('  ℹ️ '+slot+(name?' — '+name:''));
+    }
+  }
+  let tail;
+  if (reds.length) tail = '\n🙋 *Joker recherché* : '+reds.join(' · ')+'\n\n(Ce message est mis à jour chaque week-end. La permanence compte sur vous !)';
+  else tail = '\n✅ Toutes les permanences sont pourvues, merci les permanents et jokers ! 🎉';
+
+  const leg = '\n🟢 permanent · 🟡 joker proposé · 🔴 joker recherché';
+  return head + '\n' + lines.join('\n') + tail + leg + '\n';
+}
+
+function updateMessage(weekEvs){
+  const txt = buildMessage(weekEvs || []);
+  const ta = document.getElementById('message');
+  ta.value = txt;
+  document.getElementById('waLink').href = 'https://wa.me/?text='+encodeURIComponent(ta.value);
+}
+
+/* ================= UI ================= */
+function goWeek(n){ weekStart = addDays(weekStart, 7*n); renderAll(); }
+let icsBusy = false;
+document.getElementById('prevWeek').onclick = ()=>goWeek(-1);
+document.getElementById('nextWeek').onclick = ()=>goWeek(1);
+document.getElementById('thisWeek').onclick = ()=>{ weekStart = mondayOf(addDays(new Date(),7)); renderAll(); };
+document.getElementById('refresh').onclick = async (ev)=>{
+  if (icsBusy) return; icsBusy = true;
+  ev.target.textContent = '⏳ …';
+  await fetchIcs();
+  ev.target.textContent = '🔄 Récupérer l\'ICS'; icsBusy = false;
+};
+document.getElementById('copy').onclick = async ()=>{
+  const ta = document.getElementById('message');
+  try { await navigator.clipboard.writeText(ta.value); info('✅ Copié !'); }
+  catch(e){ ta.select(); document.execCommand('copy'); info('✅ Copié (fallback)'); }
+};
+function info(t){ const el=document.getElementById('copyInfo'); el.textContent=t; setTimeout(()=>el.textContent='',2500); }
+
+// réglages
+function buildSettingsUI(){
+  document.getElementById('icsUrl').value = settings.icsUrl;
+  document.getElementById('shopName').value = settings.shopName;
+  const wrap = document.getElementById('colormap');
+  wrap.innerHTML = '';
+  const known = new Set(Object.keys(settings.colormap));
+  const svg = document.getElementById ? svgColors(known) : '';
+  wrap.innerHTML = svg;
+}
+function svgColors(known){
+  let h = '<table style="border-collapse:collapse;width:100%">';
+  for (const c of known){
+    h += '<tr><td style="padding:2px"><span class="dot" style="background:'+cssColor(c)+'"></span>'
+      + '<code>'+escapeHtml(c)+'</code></td><td style="padding:2px"><select data-color="'+escapeHtml(c)+'" style="width:100%">'
+      + ['green','yellow','red','other'].map(o=>'<option value="'+o+'"'+(settings.colormap[c]===o?' selected':'')+'>'+{green:'Vert — permanent',yellow:'Jaune — joker proposé',red:'Rouge — joker recherché',other:'Neutre / info'}[o]+'</option>').join('')
+      + '</select></td></tr>';
+  }
+  return h + '</table>';
+}
+function cssColor(name){
+  if (/^#/.test(name)) return name;
+  const s = new Option().style; s.color = name;
+  return s.color || '#ccc';
+}
+document.getElementById('saveSettings').onclick = ()=>{
+  const cm = Object.assign({}, settings.colormap);
+  document.querySelectorAll('#colormap select').forEach(s=> cm[s.dataset.color]=s.value);
+  cm['other'] = cm['other'] || 'other';
+  settings = Object.assign({}, settings, {
+    icsUrl: document.getElementById('icsUrl').value.trim() || DEFAULTS.icsUrl,
+    shopName: document.getElementById('shopName').value.trim() || 'Permanences',
+    colormap: cm
+  });
+  saveSettings(); renderAll(); info('Réglages enregistrés');
+};
+document.getElementById('pasteBtn').onclick = ()=>{ const z=document.getElementById('pasteZone'); z.style.display = z.style.display==='none'?'block':'none'; };
+document.getElementById('pasteLoad').onclick = ()=>{
+  const t = document.getElementById('pasteArea').value;
+  if (/BEGIN:VCALENDAR/i.test(t)){ icsText=t; srcUsed='collage manuel'; localStorage.setItem('perma.ics',t); renderAll(); }
+  else alert('Le contenu collé ne ressemble pas à un fichier ICS.');
+};
+
+function escapeHtml(s){ return s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ================= Boot ================= */
+buildSettingsUI();
+renderAll();
+if (!icsText) fetchIcs();
+else { // rafraîchissement en arrière-plan
+  fetchIcs();
+}
+</script>
+</body>
+</html>

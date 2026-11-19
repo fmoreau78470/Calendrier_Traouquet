@@ -1,0 +1,38 @@
+name: Mise à jour du calendrier ICS
+# Télécharge l'ICS public Framagenda et le commite
+# une fois par jour, afin d'offrir à la page web un cache same-origin
+# (GitHub Pages autorise les requêtes cross-origin, contrairement à Framagenda).
+# 100 % gratuit sur un dépôt public (2000 min/mois offertes, ~1 min/jour utilisées).
+
+on:
+  schedule:
+    - cron: '30 9 * * 5-6'   # vendredi et samedi 09:30 UTC (10:30 h Paris) — avant la diffusion du week-end
+  workflow_dispatch: {}       # déclenchement manuel possible
+
+permissions:
+  contents: write
+
+jobs:
+  update-ics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Télécharger l'ICS public
+        run: |
+          curl -sf --max-time 60 \
+            "https://framagenda.org/remote.php/dav/public-calendars/5m33p3SsirPzZPq2/?export" \
+            -o ics/perma.ics
+          test -s ics/perma.ics && grep -q "BEGIN:VCALENDAR" ics/perma.ics
+
+      - name: Commit & push si modifié
+        run: |
+          git config user.name  "perma-bot"
+          git config user.email "perma-bot@users.noreply.github.com"
+          git add ics/perma.ics
+          if git diff --cached --quiet; then
+            echo "Calendrier inchangé"
+          else
+            git commit -m "Mise à jour automatique de l'ICS ($(date -u +%F))"
+            git push
+          fi
