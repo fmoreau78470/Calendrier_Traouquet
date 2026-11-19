@@ -65,9 +65,9 @@
 <main>
   <section class="card">
     <div class="legend">
-      <span><span class="dot" style="background:var(--st-green)"></span>Permanent</span>
-      <span><span class="dot" style="background:var(--st-yellow)"></span>Joker s'est proposé</span>
-      <span><span class="dot" style="background:var(--st-red)"></span>Joker recherché</span>
+      <span><span class="dot" style="background:var(--st-green)"></span>Permanent.e</span>
+      <span><span class="dot" style="background:var(--st-yellow)"></span>Joker s'est proposé.e</span>
+      <span><span class="dot" style="background:var(--st-red)"></span>Joker recherché.e</span>
       <span><span class="dot" style="background:var(--st-other)"></span>Autre / infos</span>
     </div>
     <div id="tableWrap"></div>
@@ -465,9 +465,9 @@ function buildSvg(weekEvs){
   });
   const ly = y0+HEAD_H+rows.length*ROW_H+18;
   s += `<g font-size="12">`
-    + `<rect x="10" y="${ly-11}" width="13" height="13" rx="3" fill="${PAL.green}"/><text x="28" y="${ly}">Permanent</text>`
-    + `<rect x="120" y="${ly-11}" width="13" height="13" rx="3" fill="${PAL.yellow}"/><text x="138" y="${ly}">Joker s'est proposé</text>`
-    + `<rect x="300" y="${ly-11}" width="13" height="13" rx="3" fill="${PAL.red}"/><text x="318" y="${ly}">Joker recherché</text>`
+    + `<rect x="10" y="${ly-11}" width="13" height="13" rx="3" fill="${PAL.green}"/><text x="28" y="${ly}">Permanent.e</text>`
+    + `<rect x="120" y="${ly-11}" width="13" height="13" rx="3" fill="${PAL.yellow}"/><text x="138" y="${ly}">Joker s'est proposé.e</text>`
+    + `<rect x="300" y="${ly-11}" width="13" height="13" rx="3" fill="${PAL.red}"/><text x="318" y="${ly}">Joker recherché.e</text>`
     + `</g>`;
   return s + '</svg>';
 }
@@ -548,7 +548,7 @@ function svgColors(known){
   for (const c of known){
     h += '<tr><td style="padding:2px"><span class="dot" style="background:'+cssColor(c)+'"></span>'
       + '<code>'+escapeHtml(c)+'</code></td><td style="padding:2px"><select data-color="'+escapeHtml(c)+'" style="width:100%">'
-      + ['green','yellow','red','other'].map(o=>'<option value="'+o+'"'+(settings.colormap[c]===o?' selected':'')+'>'+{green:'Vert — permanent',yellow:'Jaune — joker proposé',red:'Rouge — joker recherché',other:'Neutre / info'}[o]+'</option>').join('')
+      + ['green','yellow','red','other'].map(o=>'<option value="'+o+'"'+(settings.colormap[c]===o?' selected':'')+'>'+{green:'Vert — permanent.e',yellow:'Jaune — joker proposé.e',red:'Rouge — joker recherché.e',other:'Neutre / info'}[o]+'</option>').join('')
       + '</select></td></tr>';
   }
   return h + '</table>';
