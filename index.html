@@ -329,12 +329,11 @@ function statusOf(ev){
 let currentWeekEvs = [];
 function renderAll(){
   if (!icsText){ document.getElementById('tableWrap').innerHTML = '<p class="muted">Aucun calendrier chargé. Cliquez sur « 🔄 Récupérer l\'ICS » ou collez un .ics dans les réglages.</p>'; updateMessage([]); return; }
-  const ws = weekStart, we = addDays(ws,6);
-  // libellé de semaine
-  const moDF = new Intl.DateTimeFormat('fr-FR',{day:'numeric',month:'long'});
+  const ws = weekStart, we = weekEnd();
+  // libellé de semaine (jusqu'au dernier jour ouvert)
   const yrDF = new Intl.DateTimeFormat('fr-FR',{year:'numeric'});
   document.getElementById('weekLabel').textContent =
-    moDF.format(ws) + ' → ' + moDF.format(we) + ' ' + yrDF.format(we);
+    weekRangeText() + ' ' + yrDF.format(we);
 
   const evs = parseIcs(icsText);
   const weekEvs = eventsForWeek(evs, ws);
@@ -377,13 +376,24 @@ function renderAll(){
   updateMessage(weekEvs);
 }
 
+// libellé de la période : du premier au dernier jour OUVERT de la fenêtre (mardi→lundi)
+function weekEnd(){ // dernier jour de fermeture exclu
+  const vis = visibleDays();
+  return addDays(weekStart, vis[vis.length-1]);
+}
+function weekRangeText(){ return weekRangeTextFor(weekStart); }
+function weekRangeTextFor(ws){
+  const df = new Intl.DateTimeFormat('fr-FR',{day:'numeric',month:'long'});
+  const fin = (()=>{ const vis = visibleDays(); return addDays(ws, vis[vis.length-1]); })();
+  return df.format(ws) + ' au ' + df.format(fin);
+}
+
 /* ================= Message WhatsApp (jokers recherchés uniquement) ================= */
 function pad2(n){ return String(n).padStart(2,'0'); }
 function buildMessage(weekEvs){
   const ws = weekStart;
-  const rangeDF = new Intl.DateTimeFormat('fr-FR',{day:'numeric',month:'long'});
   const head = 'Bonjour à toutes et à tous,\n'
-    + 'voici le planning de la semaine du '+rangeDF.format(ws)+' au '+rangeDF.format(addDays(ws,6))+'\n';
+    + 'voici le planning de la semaine du '+weekRangeText()+'\n';
 
   // un point rouge par créneau sans joker (rouge), sur les jours ouverts
   const reds = [];
@@ -424,11 +434,11 @@ function buildSvg(weekEvs){
   const vis = visibleDays();
   const W = SLOT_W + vis.length*DAY_W, H = TITLE_H + HEAD_H + rows.length*ROW_H + LEG_H;
   const PAL = {green:'#b8e0a4', yellow:'#ffef99', red:'#f5a9a9', other:'#cfd8e8', empty:'#f6f7f9'};
-  const rangeDF = new Intl.DateTimeFormat('fr-FR',{day:'numeric',month:'long'});
   const yrDF = new Intl.DateTimeFormat('fr-FR',{year:'numeric'});
   let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Segoe UI,Helvetica,Arial,sans-serif">`;
   s += `<rect width="${W}" height="${H}" fill="#ffffff"/>`;
-  s += `<text x="${W/2}" y="21" font-size="15" font-weight="bold" text-anchor="middle">🛒 ${escXml(settings.shopName)} — semaine du ${rangeDF.format(ws)} au ${rangeDF.format(addDays(ws,6))} ${yrDF.format(addDays(ws,6))}</text>`;
+  const we = weekEnd();
+  s += `<text x="${W/2}" y="21" font-size="15" font-weight="bold" text-anchor="middle">🛒 ${escXml(settings.shopName)} — semaine du ${weekRangeText()} ${yrDF.format(we)}</text>`;
   const y0 = TITLE_H;
   s += `<rect x="0" y="${y0}" width="${W}" height="${HEAD_H}" fill="#eef1f5"/>`;
   s += `<rect x="0" y="${y0}" width="${SLOT_W}" height="${HEAD_H}" stroke="#d9dde3" fill="none"/>`;
