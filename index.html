@@ -101,12 +101,6 @@
       </div>
       <div class="actions">
         <button id="saveSettings" class="primary">Enregistrer les réglages</button>
-        <button id="pasteBtn">📥 Utiliser un .ics collé</button>
-      </div>
-      <div class="field" id="pasteZone" style="display:none">
-        <label for="pasteArea">Collez ici le contenu du fichier .ics</label>
-        <textarea id="pasteArea" rows="4"></textarea>
-        <button id="pasteLoad">Charger</button>
       </div>
     </details>
   </section>
@@ -579,12 +573,6 @@ document.getElementById('saveSettings').onclick = ()=>{
     colormap: cm
   });
   saveSettings(); renderAll(); info('Réglages enregistrés');
-};
-document.getElementById('pasteBtn').onclick = ()=>{ const z=document.getElementById('pasteZone'); z.style.display = z.style.display==='none'?'block':'none'; };
-document.getElementById('pasteLoad').onclick = ()=>{
-  const t = document.getElementById('pasteArea').value;
-  if (/BEGIN:VCALENDAR/i.test(t)){ icsText=t; srcUsed='collage manuel'; localStorage.setItem('perma.ics',t); renderAll(); }
-  else alert('Le contenu collé ne ressemble pas à un fichier ICS.');
 };
 
 function escapeHtml(s){ return s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
